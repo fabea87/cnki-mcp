@@ -86,9 +86,14 @@ export async function cnkiFetch(path: string, session: Session, opts: FetchOpts 
   const url = path.startsWith("http") ? path : `${config.base}${path}`;
   const headers = baseHeaders({
     Cookie: cookieHeader(session.cookies),
-    Referer: `${config.base}/kns8s/defaultresult/index`,
+    // Paging (page ≥ 2) is only honoured when Origin + the search-page Referer are present.
+    Referer: `${config.base}/kns8s/search?classid=WD0FTY92&korder=SU`,
     ...(opts.method === "POST"
-      ? { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-Requested-With": "XMLHttpRequest" }
+      ? {
+          Origin: config.base,
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-Requested-With": "XMLHttpRequest",
+        }
       : {}),
     ...opts.headers,
   });

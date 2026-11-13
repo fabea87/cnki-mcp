@@ -63,16 +63,27 @@ export type SearchResult = {
   rawCount: number;
 };
 
-/** Paging tokens are per-result-set; keep the latest so page 2+ works. */
-const turnPageCache = new Map<string, string>();
+/**
+ * Paging (captured from the real UI): page 2+ is NOT the page-1 payload with a
+ * bigger pageNum. It differs in every one of these fields:
+ *   boolSearch=false, QueryJson.Products=<db code list> (Resource stays CROSSDB,
+ *   Classid stays), SearchFrom=4, aside="", plus turnpage=<token from page 1>,
+ *   and no CurPage.
+ */
+const PAGE2_DB_CODES =
+  "CJFQ,CAPJ,ZHYX,CJTL,CDFD,CMFD,WBFD,CPFD,IPFD,CCND,SCSF,SCHF,SCSD,SNAD,CCJD,CJFN,CCVD";
+
+type PagingState = { token: string; queryJson: unknown; dbCodes: string };
+/** Paging state is per-result-set; page 1 seeds it, page 2+ consumes it. */
+const pagingCache = new Map<string, PagingState>();
 
 function queryKey(p: SearchParams): string {
   return `${p.searchType ?? "SU"}:${p.keyword}:${p.pageSize ?? 20}`;
 }
 
-function buildQueryJson(p: SearchParams): string {
+function buildQueryJson(p: SearchParams): Record<string, unknown> {
   const field = p.searchType ?? "SU";
-  return JSON.stringify({
+  return {
     Platform: "",
     Resource: "CROSSDB",
     Classid: "WD0FTY92",
@@ -105,7 +116,7 @@ function buildQueryJson(p: SearchParams): string {
     Expands: {},
     View: "changeDBCh",
     SearchFrom: 1,
-  });
+  };
 }
 
 function num(s: string | undefined): number | null {
@@ -183,36 +194,73 @@ export async function search(session: Session, p: SearchParams): Promise<SearchR
   const pageNum = Math.max(1, p.pageNum ?? 1);
   const pageSize = p.pageSize ?? 20;
   const key = queryKey(p);
-  if (pageNum === 1) turnPageCache.delete(key);
-  const token = pageNum > 1 ? (turnPageCache.get(key) ?? null) : null;
-  if (pageNum > 1 && !token) {
-    throw new Error(`page ${pageNum} needs a previous page-1 call for this query first`);
+
+  // QueryJson carries the raw keyword; URLSearchParams encodes spaces as "+" on the wire.
+  const qj = buildQueryJson(p);
+  const sortField = p.sort === "time" ? "PT" : "";
+  const sortType = p.sort === "time" ? "desc" : "";
+
+  if (pageNum === 1) pagingCache.delete(key);
+  const state = pageNum > 1 ? pagingCache.get(key) : undefined;
+  if (pageNum > 1 && !state) {
+    throw new Error(`page ${pageNum} needs a page-1 call for the same query first (paging token is bound to the result set)`);
   }
 
-  const form: Record<string, string> = {
-    boolSearch: "true",
-    QueryJson: buildQueryJson(p),
-    pageNum: String(pageNum),
-    pageSize: String(pageSize),
-    sortField: p.sort === "time" ? "PT" : "",
-    sortType: p.sort === "time" ? "desc" : "",
-    dstyle: "listmode",
-    productStr: "",
-    aside: `(${SEARCH_TYPES[p.searchType ?? "SU"]}：${p.keyword})`,
-    searchFrom: "资源范围：总库",
-    subject: "",
-    language: "",
-    uniplatform: "",
-    CurPage: String(pageNum),
-    turnpage: token ?? "",
-  };
+  let form: Record<string, string>;
+  if (pageNum === 1) {
+    form = {
+      boolSearch: "true",
+      QueryJson: JSON.stringify(qj),
+      pageNum: "1",
+      pageSize: String(pageSize),
+      sortField,
+      sortType,
+      dstyle: "listmode",
+      productStr: "",
+      aside: `(${SEARCH_TYPES[p.searchType ?? "SU"]}：${p.keyword})`,
+      searchFrom: "资源范围：总库",
+      subject: "",
+      language: "",
+      uniplatform: "",
+      CurPage: "1",
+    };
+  } else {
+    // Page 2+ payload, captured verbatim from the real UI.
+    // Resource stays CROSSDB; the concrete db list goes into Products.
+    const paged = {
+      ...(state!.queryJson as Record<string, unknown>),
+      Products: state!.dbCodes,
+      SearchFrom: 4,
+    } as Record<string, unknown>;
+    form = {
+      boolSearch: "false",
+      QueryJson: JSON.stringify(paged),
+      pageNum: String(pageNum),
+      pageSize: String(pageSize),
+      sortField,
+      sortType,
+      dstyle: "listmode",
+      boolSortSearch: "false",
+      productStr: "",
+      aside: "",
+      searchFrom: "资源范围：总库",
+      subject: "",
+      turnpage: state!.token,
+      language: "",
+      uniplatform: "",
+    };
+  }
 
   const r = await cnkiFetch("/kns8s/brief/grid", session, { method: "POST", form });
   if (r.status !== 200) throw new Error(`brief/grid HTTP ${r.status}`);
 
   const parsed = parseSearchHtml(r.body);
-  if (parsed.turnPageToken) turnPageCache.set(key, parsed.turnPageToken);
-  log(`search "${p.keyword}" ${SEARCH_TYPES[p.searchType ?? "SU"]} → total=${parsed.total} page=${parsed.pageNum}/${parsed.totalPages} rows=${parsed.items.length}`);
+  if (pageNum === 1 && parsed.turnPageToken) {
+    pagingCache.set(key, { token: parsed.turnPageToken, queryJson: qj, dbCodes: PAGE2_DB_CODES });
+  }
+  log(
+    `search "${p.keyword}" ${SEARCH_TYPES[p.searchType ?? "SU"]} page ${pageNum}/${parsed.totalPages} → total=${parsed.total} rows=${parsed.items.length}`,
+  );
 
   let items = parsed.items;
   if (p.resource?.length) items = items.filter((i) => p.resource!.includes(i.dbType as ResourceKind));

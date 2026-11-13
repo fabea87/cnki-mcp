@@ -16,7 +16,8 @@
     "start": "node dist/src/index.js",
     "probe": "node dist/scripts/probe-captcha.js",
     "warm": "node dist/scripts/warm-cli.js",
-    "smoke": "node dist/scripts/smoke.js"
+    "smoke": "node dist/scripts/smoke.js",
+    "paging": "node dist/scripts/paging-test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
