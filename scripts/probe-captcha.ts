@@ -3,7 +3,7 @@
  * Usage: node dist/scripts/probe-captcha.js
  */
 import { chromium } from "playwright";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { config, STATE_DIR } from "../src/config.js";
 
 const browser = await chromium.launch({ headless: process.env.HEADFUL !== "1", slowMo: 30 });
@@ -27,6 +27,7 @@ await page.waitForTimeout(4000);
 console.log("final url", page.url());
 
 const html = await page.content();
+await mkdir(STATE_DIR, { recursive: true });
 await writeFile(`${STATE_DIR}/captcha-dom.html`, html, "utf8");
 
 const info = await page.evaluate(() => {
