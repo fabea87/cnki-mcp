@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * cnki-mcp — self-maintained CNKI (知网) MCP server.
  *
