@@ -44,7 +44,7 @@ server.registerTool(
   {
     title: "知网检索",
     description:
-      "检索中国知网（CNKI）。返回题名、作者、来源刊、发表时间、下载量与详情页 URL。注意：CNKI 列表视图现已不返回被引数，cited 通常为 null。慢速串行、带 24h 缓存与每日配额。",
+      "检索中国知网（CNKI）。返回题名、作者、来源刊、发表时间、被引、下载量与详情页 URL。注意：CNKI 列表视图省略零被引的空单元格，因此 cited=null 表示零被引，非零值会正常返回。慢速串行、带 24h 缓存与每日配额。",
     inputSchema: {
       keyword: z.string().min(1).describe("检索词"),
       search_type: z
