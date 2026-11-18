@@ -30,9 +30,9 @@ export type SearchParams = {
   pageSize?: 10 | 20 | 50;
   pageNum?: number;
   sort?: "relevance" | "time";
-  /** Client-side filter on the 数据库 column. */
+  /** Client-side filter on the database-type column. */
   resource?: ResourceKind[];
-  /** Client-side filter on the 发表时间 column, e.g. "2020-2026". */
+  /** Client-side filter on the publication-date column, e.g. "2020-2026". */
   yearFrom?: number;
   yearTo?: number;
 };

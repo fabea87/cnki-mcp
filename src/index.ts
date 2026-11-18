@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * cnki-mcp — self-maintained CNKI (知网) MCP server.
+ * cnki-mcp — self-maintained CNKI MCP server.
  *
  * Fast path is plain HTTP against kns.cnki.net with a persisted cookie session;
  * the slider captcha is solved in-process (no browser, no Python). See README.

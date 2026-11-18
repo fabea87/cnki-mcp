@@ -21,7 +21,7 @@ function splitPages(pages: string): { start: string; end: string } {
   return m ? { start: m[1]!.trim(), end: m[2]!.trim() } : { start: pages.trim(), end: "" };
 }
 
-/** 网络首发 items have no volume/issue yet — say so instead of emitting ", ." */
+/** Online-first items have no volume/issue yet — say so instead of emitting ", ." */
 function pubStmt(p: PaperDetail): string {
   if (!p.year && !p.volume && !p.issue) return "[网络首发]";
   const parts: string[] = [];

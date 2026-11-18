@@ -1,7 +1,7 @@
 /**
  * Abstract-page parser (/kcms2/article/abstract?v=…).
  *
- * Layout: `.doc-top .top-tip` holds "刊名 . 年 ,卷 (期) : 起-止";
+ * Layout: `.doc-top .top-tip` holds "Journal . Year ,Volume (Issue) : start-end";
  * `.brief` holds title/authors/institution; `.row` blocks hold labelled fields.
  */
 import { parseHTML } from "linkedom";
@@ -24,7 +24,7 @@ export type PaperDetail = {
   disciplines: string;
   onlineDate: string;
   url: string;
-  /** Fields the page did not carry (e.g. 网络首发 items lack 卷/期/页). */
+  /** Fields the page did not carry (e.g. online-first items lack volume/issue/pages). */
   missing: string[];
 };
 
@@ -33,8 +33,8 @@ function clean(s: string | null | undefined): string {
 }
 
 /**
- * Labelled fields live either as `<div class="row"><span class="rowtit">标签：</span>…`
- * or as `<li><span class="rowtit">标签：</span><p>值</p></li>`. Walk every rowtit and
+ * Labelled fields live either as `<div class="row"><span class="rowtit">Label:</span>...`
+ * or as `<li><span class="rowtit">Label:</span><p>Value</p></li>`. Walk every rowtit and
  * read only its own container, so a DOI never swallows the following metadata.
  */
 function labelMap(document: Document): Map<string, string> {
@@ -68,13 +68,13 @@ export function parseDetailHtml(html: string, url: string): PaperDetail {
   const institutions: string[] = [];
   for (const h3 of document.querySelectorAll(".brief h3.author")) {
     const names = [...h3.querySelectorAll("a")].map((a) => clean(a.textContent)).filter(Boolean);
-    // CNKI renders affiliation superscripts inside author anchors (e.g. "方芳1").
+    // CNKI renders affiliation superscripts inside author anchors (e.g. "Author1").
     // Institutions are parsed from the other h3, so drop the trailing marker here.
     if (h3.getAttribute("id") === "authorpart") authors.push(...names.map((n) => n.replace(/\d+$/, "")));
     else institutions.push(...names);
   }
 
-  // "刊名 . 2026 ,8 (04) : 22-33"
+  // "Journal . 2026 ,8 (04) : 22-33"
   const tip = clean(document.querySelector(".doc-top .top-tip")?.textContent);
   const journal = clean(tip.split(".")[0]);
   const year = /(\d{4})\s*,/.exec(tip)?.[1] ?? /(\d{4})/.exec(tip)?.[1] ?? null;
@@ -128,7 +128,7 @@ export async function getDetail(session: Session, url: string, hint: DetailHint 
     throw new Error("detail page layout not recognised (page may be a redirect / login wall)");
   }
   const d = parseDetailHtml(r.body, url);
-  // 网络首发 pages carry no journal/date; recover them from the search row when given.
+  // Online-first pages carry no journal/date; recover them from the search row when given.
   if (!d.journal && hint.journal) d.journal = hint.journal;
   if (!d.year && hint.date) {
     const y = /(\d{4})/.exec(hint.date)?.[1];
