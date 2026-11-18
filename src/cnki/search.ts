@@ -61,6 +61,8 @@ export type SearchResult = {
   items: PaperRow[];
   /** Items before client-side filtering. */
   rawCount: number;
+  /** Items after client-side filtering (equals items.length). */
+  filteredCount: number;
 };
 
 /**
@@ -187,6 +189,7 @@ export function parseSearchHtml(html: string): SearchResult {
     turnPageToken,
     items,
     rawCount: items.length,
+    filteredCount: items.length,
   };
 }
 
@@ -267,5 +270,5 @@ export async function search(session: Session, p: SearchParams): Promise<SearchR
   if (p.yearFrom) items = items.filter((i) => (i.year ?? 0) >= p.yearFrom!);
   if (p.yearTo) items = items.filter((i) => (i.year ?? 9999) <= p.yearTo!);
 
-  return { ...parsed, items };
+  return { ...parsed, items, filteredCount: items.length };
 }

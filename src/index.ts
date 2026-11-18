@@ -44,7 +44,7 @@ server.registerTool(
   {
     title: "知网检索",
     description:
-      "检索中国知网（CNKI）。返回题名、作者、来源刊、发表时间、被引、下载量与详情页 URL。慢速串行、带 24h 缓存与每日配额。",
+      "检索中国知网（CNKI）。返回题名、作者、来源刊、发表时间、下载量与详情页 URL。注意：CNKI 列表视图现已不返回被引数，cited 通常为 null。慢速串行、带 24h 缓存与每日配额。",
     inputSchema: {
       keyword: z.string().min(1).describe("检索词"),
       search_type: z
@@ -105,10 +105,20 @@ server.registerTool(
   },
   async (args) => {
     try {
-      const key = `detail:${args.url}:${args.hint_journal ?? ""}:${args.hint_date ?? ""}`;
+      // URL-only key: cnki_cite shares this cache. Hints only matter for
+      // online-first records whose journal/year are missing, so re-fetch in
+      // that case instead of splitting the key (which caused duplicate hits).
+      const key = `detail:${args.url}`;
+      type CachedDetail = Record<string, unknown> & {
+        journal?: string;
+        year?: number | null;
+        cite?: Record<string, string>;
+      };
+      const hasHints = Boolean(args.hint_journal || args.hint_date);
       if (args.use_cache) {
-        const hit = await cacheGet<unknown>(key);
-        if (hit) return text({ cached: true, ...(hit as object) });
+        const hit = await cacheGet<CachedDetail>(key);
+        const needsHints = hasHints && (!hit?.journal || !hit?.year);
+        if (hit && !needsHints) return text({ cached: true, ...hit });
       }
       const detail = await enqueue(
         () => withSession((s) => getDetail(s, args.url, { journal: args.hint_journal, date: args.hint_date })),
@@ -120,6 +130,7 @@ server.registerTool(
           gb7714: formatCite(detail, "gb7714"),
           apa: formatCite(detail, "apa"),
           bibtex: formatCite(detail, "bibtex"),
+          ris: formatCite(detail, "ris"),
         },
       };
       await cacheSet(key, out);
@@ -147,17 +158,23 @@ server.registerTool(
     for (const url of args.urls) {
       try {
         const key = `detail:${url}`;
-        const cached = await cacheGet<{ gb7714?: string } & Record<string, unknown>>(key);
-        if (cached) {
-          const c = (cached.cite as Record<string, string> | undefined)?.[style];
-          if (c) {
-            lines.push(c);
-            continue;
-          }
+        const cached = await cacheGet<{ cite?: Record<string, string> }>(key);
+        const hit = cached?.cite?.[style];
+        if (hit) {
+          lines.push(hit);
+          continue;
         }
         const detail = await enqueue(() => withSession((s) => getDetail(s, url)), "cite");
         lines.push(formatCite(detail, style));
-        await cacheSet(key, { ...detail, cite: { gb7714: formatCite(detail, "gb7714") } });
+        await cacheSet(key, {
+          ...detail,
+          cite: {
+            gb7714: formatCite(detail, "gb7714"),
+            apa: formatCite(detail, "apa"),
+            bibtex: formatCite(detail, "bibtex"),
+            ris: formatCite(detail, "ris"),
+          },
+        });
       } catch (err) {
         errors.push(`${url} → ${err instanceof Error ? err.message : String(err)}`);
       }

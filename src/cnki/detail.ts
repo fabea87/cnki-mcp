@@ -68,7 +68,9 @@ export function parseDetailHtml(html: string, url: string): PaperDetail {
   const institutions: string[] = [];
   for (const h3 of document.querySelectorAll(".brief h3.author")) {
     const names = [...h3.querySelectorAll("a")].map((a) => clean(a.textContent)).filter(Boolean);
-    if (h3.getAttribute("id") === "authorpart") authors.push(...names);
+    // CNKI renders affiliation superscripts inside author anchors (e.g. "方芳1").
+    // Institutions are parsed from the other h3, so drop the trailing marker here.
+    if (h3.getAttribute("id") === "authorpart") authors.push(...names.map((n) => n.replace(/\d+$/, "")));
     else institutions.push(...names);
   }
 
